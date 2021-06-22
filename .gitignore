@@ -1,0 +1,9 @@
+# GITIGNORE
+
+build/**
+*.dll
+*.lib
+*.o
+*.out
+*.exe
+
