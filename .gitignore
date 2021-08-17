@@ -1,9 +1,11 @@
 # GITIGNORE
 
-build/**
+/build/**
 *.dll
 *.lib
 *.o
 *.out
 *.exe
 
+/lib/**
+!/lib/.placeholder
