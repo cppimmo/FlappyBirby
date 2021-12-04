@@ -1,7 +1,5 @@
 #include <stdio.h>
 #include <stdlib.h>
-#include <stdbool.h>
-
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_image.h>
 #include <SDL2/SDL_mixer.h>
@@ -16,66 +14,68 @@
 
 #define NUM_OF_PIPES 16
 #define NUM_OF_FRAMES 2
-//800 / 2 + 100 = 525
-//800 / 2 - 100 = 300
+// 800 / 2 + 100 = 525
+// 800 / 2 - 100 = 300
 
-char title[24] = "Flappy Birb, Score: ";
-const uint width = 800;
-const uint height = 600;
-//pipe info
-const uint pipeWidth = 150;
-const int lengthInBetween = 100;
-const uint pipeHeight = 400;
-SDL_Rect pipes[NUM_OF_PIPES];
-SDL_Texture* pipeTexture = NULL;
-//bird info
-const uint birdSize = 70;
-bool birdHasCollided = false;
-int curFrame = 0;
-int speed = 250;
-bool hasScored = false;
-SDL_Rect bird;
-SDL_Rect birdAnim;
-SDL_Texture* birdTexture = NULL;
+static bool loadAssets(SDL_Renderer *renderer);
+static void freeAssets(void);
+static void start(SDL_Renderer *renderer);
+static void play(SDL_Window *window, SDL_Renderer *renderer, double dt);
+static void over(SDL_Renderer *renderer);
+static void resetPlayerPos(void);
+static void draw_background(SDL_Rect *rect, SDL_Renderer *renderer);
+static void draw_bird(SDL_Rect *rectBird, SDL_Rect *rectAnim, SDL_Renderer *renderer);
+static void draw_ground(SDL_Rect *rect, SDL_Renderer *renderer, double dt);
+static void draw_pipe(SDL_Rect *rect, SDL_Rect *birdRect, SDL_Renderer *renderer);
+static void generate_pipes(void);
 
-SDL_Texture* bgTexture = NULL;
-SDL_Rect bgRect;
-SDL_Texture* groundTexture = NULL;
-SDL_Rect groundRect;
+enum boolean_t {
+    true,
+    false,
+};
+typedef enum boolean_t boolean;
 
-int score = 0;
-TTF_Font* font = NULL;
-SDL_Surface* textSurface = NULL;
-SDL_Texture* textTexture = NULL;
-SDL_Texture* textOverTexture = NULL;
-SDL_Rect textRect;
-SDL_Rect textOverRect;
+static char title[75] = "Flappy Birb, Score: ";
+static const unsigned int width = 800;
+static const unsigned int height = 600;
+// pipe info
+static const uint pipeWidth = 150;
+static const int lengthInBetween = 100;
+static const uint pipeHeight = 400;
+static SDL_Rect pipes[NUM_OF_PIPES];
+static SDL_Texture *pipeTexture = NULL;
+// bird info
+static const uint birdSize = 70;
+static bool birdHasCollided = false;
+static int curFrame = 0;
+static int speed = 250;
+static bool hasScored = false;
+static SDL_Rect bird;
+static SDL_Rect birdAnim;
+static SDL_Texture *birdTexture = NULL;
+
+static SDL_Texture *bgTexture = NULL;
+static SDL_Rect bgRect;
+static SDL_Texture *groundTexture = NULL;
+static SDL_Rect groundRect;
+
+static int score = 0;
+static TTF_Font *font = NULL;
+static SDL_Surface *textSurface = NULL;
+static SDL_Texture *textTexture = NULL;
+static SDL_Texture *textOverTexture = NULL;
+static SDL_Rect textRect;
+static SDL_Rect textOverRect;
 //SDL_Color textColor;
 
-Mix_Chunk* flapSound = NULL;
-Mix_Chunk* scoreSound = NULL;
-Mix_Chunk* loseSound = NULL;
-bool losePlayedOnce = false;
-
-bool spaceDown = false;
-
-bool loadAssets(SDL_Renderer* renderer);
-void freeAssets();
-void start(SDL_Renderer* renderer);
-void play(SDL_Window* window, SDL_Renderer* renderer, double dt);
-void over(SDL_Renderer* renderer);
-void resetPlayerPos();
-void draw_background(SDL_Rect* rect, SDL_Renderer* renderer);
-void draw_bird(SDL_Rect* rectBird, SDL_Rect* rectAnim, SDL_Renderer* renderer);
-void draw_ground(SDL_Rect* rect, SDL_Renderer* renderer, double dt);
-void draw_pipe(SDL_Rect* rect, SDL_Rect* birdRect, SDL_Renderer* renderer);
-void generate_pipes();
-
+static Mix_Chunk *flapSound = NULL;
+static Mix_Chunk *scoreSound = NULL;
+static Mix_Chunk *loseSound = NULL;
+static bool losePlayedOnce = false;
+static bool spaceDown = false;
 GAME_STATE state;
 
-int main(int argc, char** argv)
-{
-    //init SDL video and audio
+int main(int argc, char *argv[]) {
     if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO) != 0) {
         fprintf(stderr, "Could not initialize sdl2: %s\n", SDL_GetError());
     #ifdef WIN32
@@ -84,12 +84,13 @@ int main(int argc, char** argv)
         return EXIT_FAILURE;
     }
 
-    //init SDL_mixer
+    // SDL_mixer
     Mix_OpenAudio(44100, MIX_DEFAULT_FORMAT, 2, 2048);
     Mix_Volume(-1, 5);
 
     SDL_Window* window = SDL_CreateWindow(title, SDL_WINDOWPOS_UNDEFINED,
-                                SDL_WINDOWPOS_UNDEFINED, width, height, SDL_WINDOW_OPENGL);
+                                          SDL_WINDOWPOS_UNDEFINED, width,
+                                          height, SDL_WINDOW_OPENGL);
     if (window == NULL) {
         fprintf(stderr, "SDL Window Creation failed: %s\n", SDL_GetError());
     #ifdef WIN32
@@ -97,12 +98,14 @@ int main(int argc, char** argv)
     #endif
         return EXIT_FAILURE;
     }
-    SDL_Renderer* renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED
-                                                | SDL_RENDERER_PRESENTVSYNC);
+    SDL_Renderer *renderer = SDL_CreateRenderer(window, -1,
+                                                SDL_RENDERER_ACCELERATED |
+                                                SDL_RENDERER_PRESENTVSYNC);
     if (renderer == NULL) {
         fprintf(stderr, "SDL Renderer creation failed: %s\n", SDL_GetError());
     #ifdef WIN32
-        MessageBox(NULL, "Could not create SDL2 Renderer", "Error", MB_ICONERROR);
+        MessageBox(NULL, "Could not create SDL2 Renderer", "Error",
+                   MB_ICONERROR);
     #endif
         return EXIT_FAILURE;
     }
@@ -110,7 +113,8 @@ int main(int argc, char** argv)
     if (IMG_Init(IMG_INIT_WEBP) != IMG_INIT_WEBP) {
         fprintf(stderr, "Image initialization failed : %s\n", SDL_GetError());
     #ifdef WIN32
-        MessageBox(NULL, "Could not intialize SDL2 Image", "Error", MB_ICONERROR);
+        MessageBox(NULL, "Could not intialize SDL2 Image", "Error",
+                   MB_ICONERROR);
     #endif
         return EXIT_FAILURE;
     }
@@ -134,7 +138,6 @@ int main(int argc, char** argv)
     SDL_SetWindowIcon(window, icon);
     SDL_FreeSurface(icon);
 
-
     TTF_Font* font = TTF_OpenFont("res/FlappyBirdy.ttf", 22);
     if (font == NULL) {
         fprintf(stderr, "Font failed to load: %s\n", SDL_GetError());
@@ -153,7 +156,7 @@ int main(int argc, char** argv)
     textRect.h *= 4;
     textRect.x = 200 - (textRect.w / 2);
     textRect.y = 125 - (textRect.h /2);
-    //printf("Text 1, Width: %d, Height: %d\n", textRect.w, textRect.h);
+    // printf("Text 1, Width: %d, Height: %d\n", textRect.w, textRect.h);
     textSurface = TTF_RenderText_Blended_Wrapped(font, "Press space to restart", textColor2, 60);
     textOverTexture = SDL_CreateTextureFromSurface(renderer, textSurface);
     SDL_FreeSurface(textSurface);
@@ -162,7 +165,7 @@ int main(int argc, char** argv)
     textOverRect.h *= 4;
     textOverRect.x = width / 2 - (textOverRect.w / 2);
     textOverRect.y = height / 2 - (textOverRect.h / 2);
-    //printf("Text 2, Width: %d, Height: %d\n", textRect.w, textRect.h);
+    // printf("Text 2, Width: %d, Height: %d\n", textRect.w, textRect.h);
 
     if (!loadAssets(renderer)) {
         fprintf(stderr, "COuld not load crucial game assets");
@@ -176,7 +179,7 @@ int main(int argc, char** argv)
     bird.y = 250;
     bird.w = birdSize;
     bird.h = birdSize;
-    //important piece of initialization here
+    // important piece of initialization here
     state = STATE_START;
     generate_pipes();
 
@@ -185,16 +188,14 @@ int main(int argc, char** argv)
     double deltaTime = 0;
     bool running = true;
     SDL_Event event;
-    while (running)
-    {
+    while (running) {
         LAST = NOW;
         NOW = SDL_GetPerformanceCounter();
-        deltaTime = (double)((NOW - LAST) * 1000 / (double)SDL_GetPerformanceFrequency());
+        deltaTime = (double)((NOW - LAST) * 1000 /
+                    (double)SDL_GetPerformanceFrequency());
 
-        while(SDL_PollEvent(&event))
-        {
-            switch (event.type)
-            {
+        while(SDL_PollEvent(&event)) {
+            switch (event.type) {
             case SDL_QUIT:
                 running = false;
                 break;
@@ -213,8 +214,7 @@ int main(int argc, char** argv)
             }
         }
         //fps++;
-        switch (state)
-        {
+        switch (state) {
         case STATE_START:
             start(renderer);
             break;
@@ -237,8 +237,7 @@ int main(int argc, char** argv)
     return 0;
 }
 
-bool loadAssets(SDL_Renderer* renderer)
-{
+bool loadAssets(SDL_Renderer *renderer) {
     pipeTexture = IMG_LoadTexture(renderer, "res/pipe.webp");
     if (pipeTexture == NULL) {
         fprintf(stderr, "Image could not be found: %s\n", SDL_GetError());
@@ -270,8 +269,7 @@ bool loadAssets(SDL_Renderer* renderer)
     return true;
 }
 
-void freeAssets()
-{
+void freeAssets(void) {
     SDL_DestroyTexture(pipeTexture);
     SDL_DestroyTexture(birdTexture);
     SDL_DestroyTexture(bgTexture);
@@ -285,17 +283,15 @@ void freeAssets()
     Mix_Quit();
 }
 
-void start(SDL_Renderer* renderer)
-{
+void start(SDL_Renderer *renderer) {
     if (spaceDown) {
         if (birdHasCollided) {
             losePlayedOnce = false;
             state = STATE_PLAY;
             birdHasCollided = false;
             score = 0;
-        } else {
+        } else
             state++;
-        }
         spaceDown = false;
     }
 
@@ -305,18 +301,15 @@ void start(SDL_Renderer* renderer)
     draw_bird(&bird, &birdAnim, renderer);
     draw_ground(&groundRect, renderer, 0);
     SDL_RenderCopy(renderer, textTexture, NULL, &textRect);
-    for (uint i = 0; i < NUM_OF_PIPES; i++)
-    {
+    for (uint i = 0; i < NUM_OF_PIPES; i++) {
         draw_pipe(&pipes[i], &bird, renderer);
     }
-    if (bird.x > pipes[NUM_OF_PIPES - 2].x)
-    {
+    if (bird.x > pipes[NUM_OF_PIPES - 2].x) {
         generate_pipes();
     }
 }
 
-void play(SDL_Window* window, SDL_Renderer* renderer, double dt)
-{
+void play(SDL_Window *window, SDL_Renderer *renderer, double dt) {
     if (spaceDown) {
         if (!birdHasCollided) {
             Mix_PlayChannel(-1, flapSound, 0);
@@ -330,13 +323,11 @@ void play(SDL_Window* window, SDL_Renderer* renderer, double dt)
     bird.y += 1 * (int)dt / 6;
     draw_bird(&bird, &birdAnim, renderer);
     draw_ground(&groundRect, renderer, dt);
-    for (uint i = 0; i < NUM_OF_PIPES; i++)
-    {
+    for (uint i = 0; i < NUM_OF_PIPES; i++) {
         pipes[i].x -= 1 * (int)dt / 6;
         draw_pipe(&pipes[i], &bird, renderer);
     }
-    if (bird.x > pipes[NUM_OF_PIPES - 2].x)
-    {
+    if (bird.x > pipes[NUM_OF_PIPES - 2].x) {
         generate_pipes();
     }
     char scoreChar[3];
@@ -346,8 +337,7 @@ void play(SDL_Window* window, SDL_Renderer* renderer, double dt)
     SDL_SetWindowTitle(window, title);
 }
 
-void over(SDL_Renderer* renderer)
-{
+void over(SDL_Renderer *renderer) {
     if (spaceDown) {
         resetPlayerPos();
         generate_pipes();
@@ -364,8 +354,7 @@ void over(SDL_Renderer* renderer)
 
 }
 
-void draw_background(SDL_Rect* rect, SDL_Renderer* renderer)
-{
+void draw_background(SDL_Rect *rect, SDL_Renderer *renderer) {
     rect->x = 0;
     rect->y = 0;
     rect->w = width;
@@ -373,16 +362,15 @@ void draw_background(SDL_Rect* rect, SDL_Renderer* renderer)
     SDL_RenderCopy(renderer, bgTexture, NULL, rect);
 }
 
-void draw_bird(SDL_Rect* rectBird, SDL_Rect* rectAnim, SDL_Renderer* renderer)
-{
+void draw_bird(SDL_Rect *rectBird, SDL_Rect *rectAnim, SDL_Renderer *renderer) {
     if (rectBird->y >= height - (birdSize / 2)) {
         rectBird->y = height - (birdSize / 2);
     }
-//    animate(rectAnim, 100, 3);
-    /*if (fps >= 30) {
+    // animate(rectAnim, 100, 3);
+    /* if (fps >= 30) {
         curFrame++;
         fps = 0;
-    }*/
+    } */
     curFrame = (SDL_GetTicks() / speed) & NUM_OF_FRAMES + 1;
     switch(curFrame)
     {
@@ -411,8 +399,7 @@ void draw_bird(SDL_Rect* rectBird, SDL_Rect* rectAnim, SDL_Renderer* renderer)
     SDL_RenderCopy(renderer, birdTexture, rectAnim, rectBird);
 }
 
-void draw_ground(SDL_Rect* rect, SDL_Renderer* renderer, double dt)
-{
+void draw_ground(SDL_Rect *rect, SDL_Renderer *renderer, double dt) {
     const int minX = width - (width * 2);
     if (rect->x <= minX) {
         rect->x = 0;
@@ -426,8 +413,7 @@ void draw_ground(SDL_Rect* rect, SDL_Renderer* renderer, double dt)
     SDL_RenderCopy(renderer, groundTexture, NULL, rect);
 }
 
-void draw_pipe(SDL_Rect* rect, SDL_Rect* birdRect, SDL_Renderer* renderer)
-{
+void draw_pipe(SDL_Rect *rect, SDL_Rect *birdRect, SDL_Renderer *renderer) {
     SDL_Rect topRect;
     SDL_Rect middleRect;
     SDL_Rect bottomRect;
@@ -464,16 +450,14 @@ void draw_pipe(SDL_Rect* rect, SDL_Rect* birdRect, SDL_Renderer* renderer)
     SDL_RenderCopy(renderer, pipeTexture, NULL, &bottomRect);
 }
 
-void resetPlayerPos()
-{
+void resetPlayerPos(void) {
     bird.x = 100;
     bird.y = 250;
     bird.w = birdSize;
     bird.h = birdSize;
 }
 
-void generate_pipes()
-{
+void generate_pipes(void) {
     for (uint i = 0; i < NUM_OF_PIPES; i++) {
         if (i > 0) {
             pipes[i].x = pipes[i-1].x + 350;
@@ -485,3 +469,4 @@ void generate_pipes()
         //printf("Pipe at %d, Y: %d\n", i + 1, pipes[i].y);
     }
 }
+
