@@ -1,0 +1,33 @@
+#ifndef __U_UTILITY_H__
+#define __U_UTILITY_H__
+
+#include <SDL2/SDL.h>
+
+#include <stdbool.h>
+
+#define SIZEOF_ARRAY(X) sizeof(X)/sizeof(X[0])
+
+#undef bool
+#undef true
+#undef false
+
+enum boolean_t {
+    false,
+    true,
+};
+typedef enum boolean_t boolean;
+
+//type alias for better reading
+typedef unsigned int uint;
+enum gamestate_t {
+    STATE_START = 0,
+    STATE_PLAY,
+    STATE_OVER,
+};
+typedef enum gamestate_t GameState;
+
+int U_RandomNum(const int min, const int max);
+int U_RandomColor();
+boolean U_IsColliding(SDL_Rect *rect1, SDL_Rect *rect2);
+
+#endif
