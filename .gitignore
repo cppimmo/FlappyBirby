@@ -1,5 +1,7 @@
 # GITIGNORE
 
+*~
+
 /build/**
 *.dll
 *.lib
