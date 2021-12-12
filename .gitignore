@@ -1,7 +1,7 @@
 # GITIGNORE
 
 *~
-
+FlappyBirby/**
 /build/**
 *.dll
 *.lib
