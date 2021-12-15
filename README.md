@@ -1,6 +1,6 @@
 # Flappy Birby (C SDL2 Flappy Bird)
 Made by cppimmo 8/1/20 in **C99** with **SDL2**
-[Screenshot](screenshots/screenshot1.png)
+<img src="screenshots/screenshot1.png" alt="Screenshot"/>
 # Dependencies
     SDL2
     SDL2_image
