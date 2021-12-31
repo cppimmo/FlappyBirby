@@ -45,68 +45,74 @@ static void G_FreeAssets(void);
 static void P_Start(SDL_Renderer *renderer);
 static void P_Play(SDL_Window *window, SDL_Renderer *renderer, double dt);
 static void P_Over(SDL_Renderer *renderer);
-static void P_ResetPlayerPos(void);
+static void P_ResetBirdPos(void);
 static void R_DrawBackground(SDL_Rect *rect, SDL_Renderer *renderer);
-static void R_DrawBird(SDL_Rect *rectbird, SDL_Rect *rectanim,
+static void R_DrawBird(SDL_Rect *rectBird, SDL_Rect *rectAnim,
 					   SDL_Renderer *renderer);
 static void R_DrawGround(SDL_Rect *rect, SDL_Renderer *renderer, double dt);
-static void R_DrawPipe(SDL_Rect *rect, SDL_Rect *rectbird,
+static void R_DrawPipe(SDL_Rect *rect, SDL_Rect *rectBird,
 					   SDL_Renderer *renderer);
 static void P_GeneratePipes(void);
 static void P_UpdateScore(SDL_Window *window);
 
-static char title[75] = "Flappy Birby, Score: ";
-static const uint width = 800;
-static const uint height = 600;
-static const uint pipewidth = 150;
-static const int lengthinbetween = 100;
-static const uint pipeheight = 400;
+static char windowTitle[75] = "Flappy Birby, Score: ";
+static const uint windowWidth = 800;
+static const uint windowHeight = 600;
+static const uint pipeWidth = 150;
+static const int lengthInBetweenPipes = 100;
+static const uint pipeHeight = 400;
 static SDL_Rect pipes[NUM_PIPES];
-static SDL_Texture *pipetexture = NULL;
-static const uint birdsize = 70;
-static boolean birdhascollided = false;
-static int curframe = 0;
+static SDL_Texture *pipeTexture = NULL;
+static const int birdSize = 70;
+static boolean birdHasCollided = false;
+static int currFrame = 0;
 static int speed = 250;
-static boolean hasscored = false;
+static boolean hasScored = false;
 static SDL_Rect bird;
-static SDL_Rect birdanim;
-static SDL_Texture *birdtexture = NULL;
-static SDL_Texture *bgtexture = NULL;
-static SDL_Rect bgrect;
-static SDL_Texture *groundtexture = NULL;
-static SDL_Rect groundrect;
+static SDL_Rect birdAnim;
+static SDL_Texture *birdTexture = NULL;
+static SDL_Texture *bgTexture = NULL;
+static SDL_Rect bgRect;
+static SDL_Texture *groundTexture = NULL;
+static SDL_Rect groundRect;
 static int score = 0;
 static TTF_Font *font = NULL;
-static SDL_Surface *textsurface = NULL;
-static SDL_Texture *texttexture = NULL;
-static SDL_Texture *textovertexture = NULL;
-static SDL_Rect textrect;
-static SDL_Rect textoverrect;
-static Mix_Chunk *flapsound = NULL;
-static Mix_Chunk *scoresound = NULL;
-static Mix_Chunk *losesound = NULL;
-static boolean loseplayedonce = false;
-static boolean spacedown = false;
-GameState state;
+static SDL_Surface *textSurface = NULL;
+static SDL_Texture *textTexture = NULL;
+static SDL_Texture *textOverTexture = NULL;
+static SDL_Rect textRect;
+static SDL_Rect textOverRect;
+static Mix_Chunk *flapSound = NULL;
+static Mix_Chunk *scoreSound = NULL;
+static Mix_Chunk *loseSound = NULL;
+static boolean losePlayedOnce = false;
+static boolean spaceDown = false;
+static GameState state;
 
 int main(int argc, char *argv[]) {
-    if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO) != 0) {
+	SDL_Window *window;
+	SDL_Renderer *renderer;
+	SDL_Surface *windowIcon;
+    Uint64 start, end;
+    double deltatime;
+    boolean running;
+	/* BEGIN INITIALIZATION */
+	if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO) != 0) {
         LOG_ERROR("Could not initialize SDL: %s\n", SDL_GetError());
         return EXIT_FAILURE;
     }
-    Mix_OpenAudio(44100, MIX_DEFAULT_FORMAT, 2, 2048); // SDL_mixer
+    Mix_OpenAudio(44100, MIX_DEFAULT_FORMAT, 2, 2048);
     Mix_Volume(-1, 5);
 
-    SDL_Window *window = SDL_CreateWindow(title, SDL_WINDOWPOS_UNDEFINED,
-                                          SDL_WINDOWPOS_UNDEFINED, width,
-                                          height, SDL_WINDOW_SHOWN);
+    window = SDL_CreateWindow(windowTitle, SDL_WINDOWPOS_UNDEFINED,
+							  SDL_WINDOWPOS_UNDEFINED, windowWidth,
+							  windowHeight, SDL_WINDOW_SHOWN);
     if (window == NULL) {
         LOG_ERROR("SDL Window Creation failed: %s\n", SDL_GetError());
         return EXIT_FAILURE;
     }
-    SDL_Renderer *renderer = SDL_CreateRenderer(window, -1,
-                                                SDL_RENDERER_ACCELERATED |
-                                                SDL_RENDERER_PRESENTVSYNC);
+    renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED |
+								  SDL_RENDERER_PRESENTVSYNC);
     if (renderer == NULL) {
         LOG_ERROR("SDL Renderer creation failed: %s\n", SDL_GetError());
         return EXIT_FAILURE;
@@ -127,31 +133,28 @@ int main(int argc, char *argv[]) {
         return EXIT_FAILURE;
     }
 
-    SDL_Surface* icon = IMG_Load(ASSETS_DIR"birb0.webp");
-    if (icon == NULL) {
+    windowIcon = IMG_Load(ASSETS_DIR"birb0.webp");
+    if (windowIcon == NULL) {
         LOG_ERROR("SDL Icon failed to load: %s\n", SDL_GetError());
         return EXIT_FAILURE;
     }
-    SDL_SetWindowIcon(window, icon); SDL_FreeSurface(icon);
+    SDL_SetWindowIcon(window, windowIcon); SDL_FreeSurface(windowIcon);
 
-    bird.x = 100;
-    bird.y = 250;
-    bird.w = birdsize;
-    bird.h = birdsize;
+	P_ResetBirdPos(); /* set the bird to it's initial position */
+    state = STATE_START; /* important piece of initialization here */
+    P_GeneratePipes(); /* initiallly generate pipe positions */
+	/* END OF INITIALIZATION */
 
-    state = STATE_START; // important piece of initialization here
-    P_GeneratePipes();
-
-    Uint64 start = SDL_GetPerformanceCounter(), end = 0;
-    double deltatime = 0;
-    boolean running = true;
+    start = SDL_GetPerformanceCounter(); end = 0;
+    deltatime = 0;
+    running = true;
     while (running) {
+		SDL_Event event;
+
         end = start;
         start = SDL_GetPerformanceCounter();
         deltatime = (double)((start - end) * 1000 /
 					 (double)SDL_GetPerformanceFrequency());
-
-		SDL_Event event;
         while (SDL_PollEvent(&event)) {
             switch (event.type) {
             case SDL_QUIT:
@@ -160,18 +163,20 @@ int main(int argc, char *argv[]) {
             case SDL_KEYDOWN: {
                 if (event.key.repeat == 0) {
                     if (event.key.keysym.sym == SDLK_SPACE) {
-                        spacedown = true;
-                    } else if (event.key.keysym.sym == SDLK_ESCAPE) {
+                        spaceDown = true;
+                    }
+					else if (event.key.keysym.sym == SDLK_ESCAPE) {
                         running = false;
                     }
-                } else {
-                    spacedown = false;
+                }
+				else {
+                    spaceDown = false;
                 }
                 break;
 			}
             }
         }
-        //fps++;
+        /* fps++; */
         switch (state) {
         case STATE_START:
             P_Start(renderer);
@@ -185,8 +190,8 @@ int main(int argc, char *argv[]) {
         }
         SDL_RenderPresent(renderer);
     }
-    SDL_DestroyTexture(texttexture);
-    SDL_DestroyTexture(textovertexture);
+    SDL_DestroyTexture(textTexture);
+    SDL_DestroyTexture(textOverTexture);
     TTF_CloseFont(font);
     SDL_DestroyRenderer(renderer);
     SDL_DestroyWindow(window);
@@ -203,25 +208,25 @@ static void G_AppendAssetPath(char *path) {
 }
 
 static boolean G_LoadAssets(SDL_Renderer *renderer) {
-    pipetexture = IMG_LoadTexture(renderer, ASSETS_DIR"pipe.webp");
-    if (pipetexture == NULL) {
+    pipeTexture = IMG_LoadTexture(renderer, ASSETS_DIR"pipe.webp");
+    if (pipeTexture == NULL) {
         LOG_ERROR("Image could not be found: %s\n", SDL_GetError());
         return false;
     }
-    birdtexture = IMG_LoadTexture(renderer, ASSETS_DIR"birbTile.webp");
-    if (birdtexture == NULL) {
+    birdTexture = IMG_LoadTexture(renderer, ASSETS_DIR"birbTile.webp");
+    if (birdTexture == NULL) {
         LOG_ERROR("Image could not be found: %s\n", SDL_GetError());
         return false;
     }
-    SDL_QueryTexture(birdtexture, NULL, NULL, &birdanim.w, &birdanim.h);
+    SDL_QueryTexture(birdTexture, NULL, NULL, &birdAnim.w, &birdAnim.h);
 
-    bgtexture = IMG_LoadTexture(renderer, ASSETS_DIR"bgTex.webp");
-    if (bgtexture == NULL) {
+    bgTexture = IMG_LoadTexture(renderer, ASSETS_DIR"bgTex.webp");
+    if (bgTexture == NULL) {
         LOG_ERROR("Image could not be found: %s\n", SDL_GetError());
         return false;
     }
-    groundtexture = IMG_LoadTexture(renderer, ASSETS_DIR"ground.webp");
-    if (groundtexture == NULL) {
+    groundTexture = IMG_LoadTexture(renderer, ASSETS_DIR"ground.webp");
+    if (groundTexture == NULL) {
         LOG_ERROR("Image could not be found: %s\n", SDL_GetError());
         return false;
     }
@@ -233,248 +238,259 @@ static boolean G_LoadAssets(SDL_Renderer *renderer) {
 	if (!G_SetupFont(renderer)) {
 		LOG_ERROR("G_SetupFont(): failed: %s!\n", TTF_GetError());
 	}
-    flapsound = Mix_LoadWAV(ASSETS_DIR"flap.wav");
-    if (flapsound == NULL) return false;
-    scoresound = Mix_LoadWAV(ASSETS_DIR"score.wav");
-    if (scoresound == NULL) return false;
-    losesound = Mix_LoadWAV(ASSETS_DIR"lose.wav");
-    if (losesound == NULL) return false;
+    flapSound = Mix_LoadWAV(ASSETS_DIR"flap.wav");
+    if (flapSound == NULL) return false;
+    scoreSound = Mix_LoadWAV(ASSETS_DIR"score.wav");
+    if (scoreSound == NULL) return false;
+    loseSound = Mix_LoadWAV(ASSETS_DIR"lose.wav");
+    if (loseSound == NULL) return false;
     return true;
 }
 
 static boolean G_SetupFont(SDL_Renderer *renderer) {
-    const SDL_Color textcolor = { 0, 0, 0, 255 };
-    const SDL_Color textcolor2 = { 255, 255, 255, 255 };
-    textsurface = TTF_RenderText_Blended_Wrapped(font, "Press Space to Start",
-												 textcolor, 60);
-    texttexture = SDL_CreateTextureFromSurface(renderer, textsurface);
-    SDL_FreeSurface(textsurface);
-    SDL_QueryTexture(texttexture, NULL, NULL, &textrect.w, &textrect.h);
-    textrect.w *= 4;
-    textrect.h *= 4;
-    textrect.x = 200 - (textrect.w / 2);
-    textrect.y = 125 - (textrect.h /2);
-    // printf("Text 1, Width: %d, Height: %d\n", textrect.w, textrect.h);
-    textsurface = TTF_RenderText_Blended_Wrapped(font, "Press Space to Restart",
-												 textcolor2, 60);
-    textovertexture = SDL_CreateTextureFromSurface(renderer, textsurface);
-    SDL_FreeSurface(textsurface);
-    SDL_QueryTexture(textovertexture, NULL, NULL, &textoverrect.w,
-					 &textoverrect.h);
-    textoverrect.w *= 4;
-    textoverrect.h *= 4;
-    textoverrect.x = width / 2 - (textoverrect.w / 2);
-    textoverrect.y = height / 2 - (textoverrect.h / 2);
-    // printf("Text 2, Width: %d, Height: %d\n", textrect.w, textrect.h);
+    const SDL_Color textColor = { 0, 0, 0, 255 };
+    const SDL_Color textColor2 = { 255, 255, 255, 255 };
+    textSurface = TTF_RenderText_Blended_Wrapped(font, "Press Space to Start",
+												 textColor, 60);
+    textTexture = SDL_CreateTextureFromSurface(renderer, textSurface);
+    SDL_FreeSurface(textSurface);
+    SDL_QueryTexture(textTexture, NULL, NULL, &textRect.w, &textRect.h);
+    textRect.w *= 4;
+    textRect.h *= 4;
+    textRect.x = 200 - (textRect.w / 2);
+    textRect.y = 125 - (textRect.h /2);
+    /* printf("Text 1, Width: %d, Height: %d\n", textRect.w, textRect.h); */
+    textSurface = TTF_RenderText_Blended_Wrapped(font, "Press Space to Restart",
+												 textColor2, 60);
+    textOverTexture = SDL_CreateTextureFromSurface(renderer, textSurface);
+    SDL_FreeSurface(textSurface);
+    SDL_QueryTexture(textOverTexture, NULL, NULL, &textOverRect.w,
+					 &textOverRect.h);
+    textOverRect.w *= 4;
+    textOverRect.h *= 4;
+    textOverRect.x = windowWidth / 2 - (textOverRect.w / 2);
+    textOverRect.y = windowHeight / 2 - (textOverRect.h / 2);
+    /* printf("Text 2, Width: %d, Height: %d\n", textRect.w, textRect.h); */
 	return true;
 }
 
 static void G_FreeAssets(void) {
-    SDL_DestroyTexture(pipetexture);
-    SDL_DestroyTexture(birdtexture);
-    SDL_DestroyTexture(bgtexture);
-    SDL_DestroyTexture(groundtexture);
+    SDL_DestroyTexture(pipeTexture);
+    SDL_DestroyTexture(birdTexture);
+    SDL_DestroyTexture(bgTexture);
+    SDL_DestroyTexture(groundTexture);
     IMG_Quit();
     TTF_Quit();
-    Mix_FreeChunk(flapsound);
-    Mix_FreeChunk(scoresound);
-    Mix_FreeChunk(losesound);
+    Mix_FreeChunk(flapSound);
+    Mix_FreeChunk(scoreSound);
+    Mix_FreeChunk(loseSound);
     Mix_CloseAudio();
     Mix_Quit();
 }
 
 static void P_Start(SDL_Renderer *renderer) {
-    if (spacedown) {
-        if (birdhascollided) {
-            loseplayedonce = false;
+	size_t index;
+
+    if (spaceDown) {
+        if (birdHasCollided) {
+            losePlayedOnce = false;
             state = STATE_PLAY;
-            birdhascollided = false;
+            birdHasCollided = false;
             score = 0;
-        } else
+        }
+		else
             state++;
-        spacedown = false;
+        spaceDown = false;
     }
 
     SDL_SetRenderDrawColor(renderer, 0, 255/2, 255, 255);
     SDL_RenderClear(renderer);
-    R_DrawBackground(&bgrect, renderer);
-    R_DrawBird(&bird, &birdanim, renderer);
-    R_DrawGround(&groundrect, renderer, 0);
-    SDL_RenderCopy(renderer, texttexture, NULL, &textrect);
-    for (uint i = 0; i < NUM_PIPES; i++) {
-        R_DrawPipe(&pipes[i], &bird, renderer);
-    }
-    if (bird.x > pipes[NUM_PIPES - 2].x) {
+    R_DrawBackground(&bgRect, renderer);
+    R_DrawBird(&bird, &birdAnim, renderer);
+    R_DrawGround(&groundRect, renderer, 0);
+    SDL_RenderCopy(renderer, textTexture, NULL, &textRect);
+    for (index = 0; index < NUM_PIPES; index++)
+        R_DrawPipe(&pipes[index], &bird, renderer);
+
+    if (bird.x > pipes[NUM_PIPES - 2].x)
         P_GeneratePipes();
-    }
 }
 
 static void P_Play(SDL_Window *window, SDL_Renderer *renderer, double dt) {
-    if (spacedown) {
-        if (!birdhascollided) {
-            Mix_PlayChannel(-1, flapsound, 0);
+	size_t index;
+
+    if (spaceDown) {
+        if (!birdHasCollided) {
+            Mix_PlayChannel(-1, flapSound, 0);
             bird.y -= 50;
         }
-        spacedown = false;
+        spaceDown = false;
     }
     SDL_SetRenderDrawColor(renderer, 0, 255/2, 255, 255);
     SDL_RenderClear(renderer);
-    R_DrawBackground(&bgrect, renderer);
+    R_DrawBackground(&bgRect, renderer);
+
     bird.y += 1 * (int)dt / 6;
-    R_DrawBird(&bird, &birdanim, renderer);
-    R_DrawGround(&groundrect, renderer, dt);
-    for (size_t i = 0; i < NUM_PIPES; i++) {
-        pipes[i].x -= 1 * (int)dt / 6;
-        R_DrawPipe(&pipes[i], &bird, renderer);
+    R_DrawBird(&bird, &birdAnim, renderer);
+    R_DrawGround(&groundRect, renderer, dt);
+    for (index = 0; index < NUM_PIPES; index++) {
+        pipes[index].x -= 1 * (int)dt / 6;
+        R_DrawPipe(&pipes[index], &bird, renderer);
     }
+
     if (bird.x > pipes[NUM_PIPES - 2].x) {
-        P_GeneratePipes();
-    }
+		P_GeneratePipes();
+	}
+
 	P_UpdateScore(window);
 }
 
 static void P_Over(SDL_Renderer *renderer) {
-    if (spacedown) {
-        P_ResetPlayerPos();
+    if (spaceDown) {
+        P_ResetBirdPos();
         P_GeneratePipes();
         state = STATE_START;
-        spacedown = false;
-    }
-    SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
-    SDL_RenderClear(renderer);
-    SDL_RenderCopy(renderer, textovertexture, NULL, &textoverrect);
-    if (!loseplayedonce) {
-        Mix_PlayChannel(-1, losesound, 0);
-        loseplayedonce = true;
+        spaceDown = false;
     }
 
+    SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
+    SDL_RenderClear(renderer);
+    SDL_RenderCopy(renderer, textOverTexture, NULL, &textOverRect);
+
+    if (!losePlayedOnce) {
+        Mix_PlayChannel(-1, loseSound, 0);
+        losePlayedOnce = true;
+    }
 }
 
 static void R_DrawBackground(SDL_Rect *rect, SDL_Renderer *renderer) {
     rect->x = 0;
     rect->y = 0;
-    rect->w = width;
-    rect->h = height;
-    SDL_RenderCopy(renderer, bgtexture, NULL, rect);
+    rect->w = windowWidth;
+    rect->h = windowHeight;
+    SDL_RenderCopy(renderer, bgTexture, NULL, rect);
 }
 
-static void R_DrawBird(SDL_Rect *rectbird, SDL_Rect *rectanim,
+static void R_DrawBird(SDL_Rect *rectBird, SDL_Rect *rectAnim,
 					   SDL_Renderer *renderer) {
-    if (rectbird->y >= height - (birdsize / 2)) {
-        rectbird->y = height - (birdsize / 2);
+    if (rectBird->y >= ((int)windowHeight) - (birdSize / 2)) {
+        rectBird->y = ((int)windowHeight) - (birdSize / 2);
     }
-    // animate(rectanim, 100, 3);
+    /* animate(rectAnim, 100, 3); */
     /* if (fps >= 30) {
-        curframe++;
+        currFrame++;
         fps = 0;
     } */
-    curframe = (SDL_GetTicks() / speed) & NUM_FRAMES + 1;
-    switch(curframe)
+    currFrame = (SDL_GetTicks() / speed) & (NUM_FRAMES + 1);
+    switch(currFrame)
     {
     case 0:
-        rectanim->x = 0;
-        rectanim->y = 0;
-        rectanim->w = 65;
-        rectanim->h = 68;
+        rectAnim->x = 0;
+        rectAnim->y = 0;
+        rectAnim->w = 65;
+        rectAnim->h = 68;
         break;
     case 1:
-        rectanim->x = 65;
-        rectanim->y = 0;
-        rectanim->w = 65;
-        rectanim->h = 68;
+        rectAnim->x = 65;
+        rectAnim->y = 0;
+        rectAnim->w = 65;
+        rectAnim->h = 68;
         break;
     case 2:
-        rectanim->x = 65 + 65;
-        rectanim->y = 0;
-        rectanim->w = 65;
-        rectanim->h = 68;
+        rectAnim->x = 65 + 65;
+        rectAnim->y = 0;
+        rectAnim->w = 65;
+        rectAnim->h = 68;
         break;
     case 3:
-        //curframe = 0;
+        /* currFrame = 0; */
         break;
     }
-    SDL_RenderCopy(renderer, birdtexture, rectanim, rectbird);
+    SDL_RenderCopy(renderer, birdTexture, rectAnim, rectBird);
 }
 
 static void R_DrawGround(SDL_Rect *rect, SDL_Renderer *renderer, double dt) {
-    const int minx = width - (width * 2);
-    if (rect->x <= minx) {
+    const int minX = windowWidth - (windowWidth * 2);
+    if (rect->x <= minX) {
         rect->x = 0;
     }
     else {
         rect->x -= 1 * (int)dt / 6;
     }
     rect->y = 0;
-    rect->w = width * 2;
-    rect->h = height;
-    SDL_RenderCopy(renderer, groundtexture, NULL, rect);
+    rect->w = windowWidth * 2;
+    rect->h = windowHeight;
+    SDL_RenderCopy(renderer, groundTexture, NULL, rect);
 }
 
-static void R_DrawPipe(SDL_Rect *rect, SDL_Rect *rectbird,
+static void R_DrawPipe(SDL_Rect *rect, SDL_Rect *rectBird,
 					   SDL_Renderer *renderer) {
-    SDL_Rect toprect;
-    SDL_Rect middlerect;
-    SDL_Rect bottomrect;
+    SDL_Rect topRect;
+    SDL_Rect middleRect;
+    SDL_Rect bottomRect;
+	static const SDL_RendererFlip renderFlip = SDL_FLIP_VERTICAL;
 
-    toprect.x = rect->x;
-    toprect.y = rect->y - pipeheight - lengthinbetween;
-    toprect.w = pipewidth;
-    toprect.h = pipeheight;
+	topRect.x = rect->x;
+    topRect.y = rect->y - pipeHeight - lengthInBetweenPipes;
+    topRect.w = pipeWidth;
+    topRect.h = pipeHeight;
 
-    bottomrect.x = rect->x;
-    bottomrect.y = rect->y + lengthinbetween;
-    bottomrect.w = pipewidth;
-    bottomrect.h = pipeheight;
+    bottomRect.x = rect->x;
+    bottomRect.y = rect->y + lengthInBetweenPipes;
+    bottomRect.w = pipeWidth;
+    bottomRect.h = pipeHeight;
 
-    middlerect.x = rect->x + (pipewidth/2);
-    middlerect.y = bottomrect.y - (lengthinbetween * 2);
-    middlerect.w = 3;
-    middlerect.h = lengthinbetween * 2;
+    middleRect.x = rect->x + (pipeWidth/2);
+    middleRect.y = bottomRect.y - (lengthInBetweenPipes * 2);
+    middleRect.w = 3;
+    middleRect.h = lengthInBetweenPipes * 2;
 
-    if (U_IsColliding(rectbird, &toprect) || U_IsColliding(rectbird,
-														   &bottomrect)) {
+    if (U_IsColliding(rectBird, &topRect) || U_IsColliding(rectBird,
+														   &bottomRect)) {
         state = STATE_OVER;
-        birdhascollided = true;
+        birdHasCollided = true;
     }
-    if (U_IsColliding(rectbird, &middlerect) && !hasscored &&
-		rectbird->x > middlerect.x) {
-        // I don't know why this works but it does
-        Mix_PlayChannel(-1, scoresound, 0);
+    if (U_IsColliding(rectBird, &middleRect) && !hasScored &&
+		rectBird->x > middleRect.x) {
+        /* I don't know why this works but it does */
+        Mix_PlayChannel(-1, scoreSound, 0);
         score += 1;
-        hasscored = true;
-    } else {
-        hasscored = false;
+        hasScored = true;
     }
-    const SDL_RendererFlip flip = SDL_FLIP_VERTICAL;
-    SDL_RenderCopyEx(renderer, pipetexture, NULL, &toprect, 0, NULL, flip);
-    SDL_RenderCopy(renderer, pipetexture, NULL, &bottomrect);
+	else {
+        hasScored = false;
+    }
+
+    SDL_RenderCopyEx(renderer, pipeTexture, NULL, &topRect, 0, NULL, renderFlip);
+    SDL_RenderCopy(renderer, pipeTexture, NULL, &bottomRect);
 }
 
-static void P_ResetPlayerPos(void) {
+__inline static void P_ResetBirdPos(void) {
     bird.x = 100;
     bird.y = 250;
-    bird.w = birdsize;
-    bird.h = birdsize;
+    bird.w = birdSize;
+    bird.h = birdSize;
 }
 
 static void P_GeneratePipes(void) {
-    for (uint i = 0; i < NUM_PIPES; i++) {
-        if (i > 0) {
-            pipes[i].x = pipes[i-1].x + 350;
-        } else {
+	size_t index;
+    for (index = 0; index < NUM_PIPES; index++) {
+        if (index > 0)
+            pipes[index].x = pipes[index - 1].x + 350;
+        else
             pipes[0].x = 350;
-        }
-        pipes[i].y = U_RandomNum(height / 2 - lengthinbetween,
-								 height / 2 + lengthinbetween) + 200;
-        //printf("Pipe at %d, Y: %d\n", i + 1, pipes[i].y);
+
+        pipes[index].y = U_RandomNum(windowHeight / 2 - lengthInBetweenPipes,
+								 windowHeight / 2 + lengthInBetweenPipes) + 200;
+        /* printf("Pipe at %d, Y: %d\n", i + 1, pipes[i].y); */
     }
 }
 
 static void P_UpdateScore(SDL_Window *window) {
-    static char scorestr[32];
-    snprintf(scorestr, sizeof(scorestr), "%d", score);
-    strcpy(title, "Flappy Birby, Score: ");
-    strcat(title, scorestr);
-    SDL_SetWindowTitle(window, title);
+    static char scoreBuf[32];
+    snprintf(scoreBuf, sizeof(scoreBuf), "%d", score);
+    strcpy(windowTitle, "Flappy Birby, Score: ");
+    strcat(windowTitle, scoreBuf);
+    SDL_SetWindowTitle(window, windowTitle);
 }
 

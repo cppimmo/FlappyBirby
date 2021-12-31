@@ -3,7 +3,7 @@ PROGNAME?=FlappyBirby
 LIB_DIR?=./lib
 BUILD_DIR?=./build
 SRC_DIRS?=./src
-CFLAGS=-O2 -g -Wall -W -std=c99 -Wno-unused-parameter
+CFLAGS=-O2 -g -Wall -W -std=gnu89 -Wno-unused-parameter
 LDFLAGS=-lSDL2 -lSDL2_ttf -lSDL2_mixer -lSDL2_image -lm
 SRCS:=$(shell find $(SRC_DIRS) -name *.cpp -or -name *.c -or -name *.s)
 OBJS:=$(SRCS:%=$(BUILD_DIR)/%.o)
