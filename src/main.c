@@ -38,6 +38,14 @@
 // 800 / 2 + 100 = 525
 // 800 / 2 - 100 = 300
 
+/* typedef struct Bird {
+    SDL_Rect pos;
+    SDL_Rect anim;
+    SDL_Texture *texture;
+    float angle;
+    const int size = 70;
+} bird; */
+
 static void G_AppendAssetPath(char *path);
 static boolean G_LoadAssets(SDL_Renderer *renderer);
 static boolean G_SetupFont(SDL_Renderer *renderer);
@@ -70,6 +78,7 @@ static int speed = 250;
 static boolean hasScored = false;
 static SDL_Rect bird;
 static SDL_Rect birdAnim;
+static float birdAngle;
 static SDL_Texture *birdTexture = NULL;
 static SDL_Texture *bgTexture = NULL;
 static SDL_Rect bgRect;
@@ -318,14 +327,59 @@ static void P_Start(SDL_Renderer *renderer) {
 
 static void P_Play(SDL_Window *window, SDL_Renderer *renderer, double dt) {
 	size_t index;
-
+    static const int maxBirdMoveUp = 50;
+    static int birdStartingY = 0;
+    static int birdMove = 0;
+    static int lastBirdMove = 0;
+    static boolean birdInMotion = false;
+    static const float maxAngle = -45.0f;
+    static float lastAngle = 0.0f;
     if (spaceDown) {
         if (!birdHasCollided) {
             Mix_PlayChannel(-1, flapSound, 0);
-            bird.y -= 50;
+            /* if (bird.y < maxBirdMoveUp) {
+                birdMove += lastBirdMove * 2 + 1;
+                bird.y -= birdMove;
+                lastBirdMove = birdMove;
+            } else {
+                birdMove = 0;
+                lastBirdMove = 0;
+            } */
+            birdInMotion = true;
+            birdStartingY = bird.y;
+            printf("birdStartingY=%d|%d\n", birdStartingY, birdStartingY - maxBirdMoveUp);
+            // bird.y -= 50;
         }
         spaceDown = false;
     }
+
+    if (birdInMotion) {
+        if (bird.y > birdStartingY - maxBirdMoveUp) {
+            birdMove += lastBirdMove * 2 + 1;
+            bird.y -= birdMove;
+            lastBirdMove = birdMove;
+        }
+        else {
+            birdMove = 0;
+            lastBirdMove = 0;
+            birdStartingY = bird.y;
+            birdInMotion = false;
+        }
+
+        if (birdAngle > maxAngle) {
+            birdAngle -= lastAngle * 3.0f + 10.0f;
+            lastAngle = birdAngle;
+            printf("birdAngle=%.2f|lastAngle=%.2f\n", birdAngle, lastAngle);
+        }
+        else {
+            lastAngle = 0.0f;
+            birdAngle = 0.0f;
+        }
+    } else {
+        birdAngle = 0.0f;
+        lastAngle = 0.0f;
+    }
+
     SDL_SetRenderDrawColor(renderer, 0, 255/2, 255, 255);
     SDL_RenderClear(renderer);
     R_DrawBackground(&bgRect, renderer);
@@ -406,7 +460,12 @@ static void R_DrawBird(SDL_Rect *rectBird, SDL_Rect *rectAnim,
         /* currFrame = 0; */
         break;
     }
-    SDL_RenderCopy(renderer, birdTexture, rectAnim, rectBird);
+    // SDL_RenderCopy(renderer, birdTexture, rectAnim, rectBird);
+    const SDL_Point center = {
+        .x = rectAnim->w / 2,
+        .y = rectAnim->h / 2
+    };
+    SDL_RenderCopyEx(renderer, birdTexture, rectAnim, rectBird, birdAngle, &center, SDL_FLIP_NONE);
 }
 
 static void R_DrawGround(SDL_Rect *rect, SDL_Renderer *renderer, double dt) {
